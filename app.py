@@ -26,7 +26,6 @@ if not st.session_state.authenticated:
     if st.button("Login"):
         if email in USERS and USERS[email] == password:
             st.session_state.authenticated = True
-            st.experimental_rerun()  # Rerun to clear the login form and show the app
         else:
             st.error("Invalid email or password")
     st.stop()  # Stop the execution here until the user logs in
