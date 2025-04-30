@@ -9,6 +9,29 @@ from transformers import BertTokenizer, BertModel
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 
+# --- Simple Authentication ---
+USERS = {
+    "admin@example.com": "admin123",
+    "user@example.com": "user123"
+}
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.title("🔐 Sign In")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if email in USERS and USERS[email] == password:
+            st.session_state.authenticated = True
+            st.experimental_rerun()
+        else:
+            st.error("Invalid email or password")
+    st.stop()
+
+# --- App Logic Below This Point ---
+
 # Download required NLTK resources
 nltk.download('punkt')
 nltk.download('stopwords')
@@ -51,7 +74,7 @@ def read_docx(file):
         st.error(f"Error reading DOCX: {e}")
         return ""
 
-# Improved keyword extractor using NLTK
+# Improved keyword extractor
 def extract_keywords(text):
     stop_words = set(stopwords.words('english'))
     sentences = sent_tokenize(text.lower())
@@ -71,7 +94,7 @@ def extract_keywords(text):
     clean_keywords = [kw.strip() for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40]
     return sorted(set(clean_keywords))
 
-# Function to calculate similarity using BERT
+# Function to calculate similarity between job description and resume using BERT
 def get_similarity(text1, text2):
     inputs1 = tokenizer(text1, return_tensors='pt')
     inputs2 = tokenizer(text2, return_tensors='pt')
@@ -129,7 +152,8 @@ if uploaded_file and job_description:
 
             plot_match_score(match_score, len(target_keywords))
 
-        report = f"Resume Keyword Match Report\n{'-'*30}\n"
+        report = f"Resume Keyword Match Report\n"
+        report += f"{'-'*30}\n"
         report += f"Matched Keywords ({len(matched_keywords)}/{len(target_keywords)}):\n"
         report += ", ".join(matched_keywords) + "\n\n"
         report += f"Score: {match_score}%\n\n"
@@ -142,7 +166,7 @@ if uploaded_file and job_description:
             report += "Great job! All key terms matched.\n"
 
         st.download_button(
-            label="📥 Download Match Report",
+            label="👅 Download Match Report",
             data=report,
             file_name="resume_score_report.txt",
             mime="text/plain"
