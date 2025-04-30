@@ -1,39 +1,56 @@
 import streamlit as st
+import streamlit_authenticator as stauth
 import pdfplumber
 import docx
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
-import streamlit_authenticator as stauth
 
-# Set up user credentials (this is a simple example, you could also store this info securely)
-usernames = ['user1', 'user2']
-passwords = ['password1', 'password2']
+# Download required NLTK resources
+nltk.download('punkt')
+nltk.download('stopwords')
 
-# Encrypt passwords for security
-hashed_passwords = stauth.Hasher(passwords).generate()
+# --- Authentication Setup ---
+credentials = {
+    "usernames": {
+        "johndoe": {
+            "name": "John Doe",
+            "password": stauth.Hasher(["123"]).generate()[0]  # Change password as needed
+        }
+    }
+}
 
-# Authentication instance
 authenticator = stauth.Authenticate(
-    usernames, 
-    hashed_passwords, 
-    'your_cookie_name', 
-    'your_signature_key', 
-    cookie_expiry_days=30
+    credentials,
+    "resume_checker_cookie",  # Cookie name
+    "abcdef",                 # Secret key
+    cookie_expiry_days=1
 )
 
-# Authentication
-name, authentication_status, username = authenticator.login('Login', 'main')
+name, authentication_status, username = authenticator.login("Login", "main")
 
-if authentication_status:
-    # Your original app code goes here if user is authenticated
+if authentication_status is False:
+    st.error("Username or password is incorrect")
+
+elif authentication_status is None:
+    st.warning("Please enter your username and password")
+
+else:
+    authenticator.logout("Logout", "sidebar")
+    st.success(f"Welcome {name}!")
+
+    # --- Resume Checker App ---
+
     st.title("📄 AI Resume Checker")
 
+    # Upload resume
     uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
 
+    # Paste job description or keyword list
     st.markdown("### 💼 Enter Job Description or Keywords")
     job_description = st.text_area("Paste the job description here, or list keywords separated by commas")
 
+    # Helper: Read PDF
     def read_pdf(file):
         with pdfplumber.open(file) as pdf:
             text = ""
@@ -43,11 +60,13 @@ if authentication_status:
                     text += page_text
             return text.lower()
 
+    # Helper: Read DOCX
     def read_docx(file):
         doc = docx.Document(file)
         full_text = "\n".join([para.text for para in doc.paragraphs])
         return full_text.lower()
 
+    # Improved keyword extractor
     def extract_keywords(text):
         stop_words = set(stopwords.words('english'))
         sentences = sent_tokenize(text.lower())
@@ -67,6 +86,7 @@ if authentication_status:
         clean_keywords = [kw.strip() for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40]
         return sorted(set(clean_keywords))
 
+    # Main logic
     if uploaded_file and job_description:
         file_type = uploaded_file.name.split(".")[-1]
         if file_type == "pdf":
@@ -104,12 +124,10 @@ if authentication_status:
                 for tip in missing:
                     st.markdown(f"- Consider including or elaborating on: **'{tip}'** if it's relevant.")
 
-            report = f"Resume Keyword Match Report\n"
-            report += f"{'-'*30}\n"
+            report = f"Resume Keyword Match Report\n{'-'*30}\n"
             report += f"Matched Keywords ({len(matched_keywords)}/{len(target_keywords)}):\n"
             report += ", ".join(matched_keywords) + "\n\n"
             report += f"Score: {match_score}%\n\n"
-
             if match_score < 100:
                 report += "Suggestions to Improve:\n"
                 for tip in missing:
@@ -125,8 +143,3 @@ if authentication_status:
             )
         else:
             st.warning("Could not extract text from the resume.")
-else:
-    if authentication_status == False:
-        st.error('Username/password is incorrect')
-    elif authentication_status == None:
-        st.warning('Please enter your username and password')
