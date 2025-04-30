@@ -10,14 +10,18 @@ from transformers import BertTokenizer, BertModel
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 
-# NLTK resource downloads
+# Download required NLTK resources (run once per environment)
 nltk.download('punkt')
 nltk.download('stopwords')
 
-# Load SpaCy model (already installed via requirements.txt)
-nlp = spacy.load("en_core_web_sm")
+# Load SpaCy model (pre-installed via requirements.txt)
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    st.error("SpaCy model 'en_core_web_sm' is not installed. Please check your requirements.txt.")
+    st.stop()
 
-# Load BERT tokenizer and model
+# Load BERT model and tokenizer
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertModel.from_pretrained('bert-base-uncased')
 
@@ -35,12 +39,7 @@ job_description = st.text_area("Paste the job description here, or list keywords
 def read_pdf(file):
     try:
         with pdfplumber.open(file) as pdf:
-            text = ""
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text
-            return text.lower()
+            return " ".join([page.extract_text() or "" for page in pdf.pages]).lower()
     except Exception as e:
         st.error(f"Error reading PDF: {e}")
         return ""
@@ -49,8 +48,7 @@ def read_pdf(file):
 def read_docx(file):
     try:
         doc = docx.Document(file)
-        full_text = "\n".join([para.text for para in doc.paragraphs])
-        return full_text.lower()
+        return "\n".join([para.text for para in doc.paragraphs]).lower()
     except Exception as e:
         st.error(f"Error reading DOCX: {e}")
         return ""
@@ -58,8 +56,7 @@ def read_docx(file):
 # Extract Named Entities (for better keyword matching)
 def extract_named_entities(text):
     doc = nlp(text)
-    entities = set([ent.text.lower() for ent in doc.ents])
-    return entities
+    return set([ent.text.lower() for ent in doc.ents])
 
 # Improved keyword extractor
 def extract_keywords(text):
@@ -68,23 +65,17 @@ def extract_keywords(text):
     keywords = set()
 
     for sent in sentences:
-        words = word_tokenize(sent)
-        words = [word for word in words if word.isalpha() and word not in stop_words]
-
+        words = [word for word in word_tokenize(sent) if word.isalpha() and word not in stop_words]
         for i in range(len(words)):
-            # single word
             keywords.add(words[i])
-            # two-word phrase
             if i + 1 < len(words):
                 keywords.add(f"{words[i]} {words[i+1]}")
-            # three-word phrase
             if i + 2 < len(words):
                 keywords.add(f"{words[i]} {words[i+1]} {words[i+2]}")
 
-    clean_keywords = [kw.strip() for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40]
-    return sorted(set(clean_keywords))
+    return sorted([kw for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40])
 
-# Function to calculate similarity between job description and resume using BERT
+# Function to calculate similarity using BERT
 def get_similarity(text1, text2):
     inputs1 = tokenizer(text1, return_tensors='pt')
     inputs2 = tokenizer(text2, return_tensors='pt')
@@ -94,31 +85,24 @@ def get_similarity(text1, text2):
     similarity = torch.cosine_similarity(outputs1[0][0], outputs2[0][0], dim=0)
     return similarity.item()
 
-# Function to plot match score
+# Plot Match Score
 def plot_match_score(match_score, total_keywords):
     fig, ax = plt.subplots()
-    ax.barh([f'Match Score'], [match_score])
+    ax.barh(["Match Score"], [match_score])
     ax.set_xlim(0, total_keywords)
     ax.set_title("Keyword Match Score")
     st.pyplot(fig)
 
 # Main logic
 if uploaded_file and job_description:
-    # Extract resume text
     file_type = uploaded_file.name.split(".")[-1]
-    if file_type == "pdf":
-        resume_text = read_pdf(uploaded_file)
-    elif file_type == "docx":
-        resume_text = read_docx(uploaded_file)
-    else:
-        st.error("Unsupported file type.")
-        resume_text = ""
+    resume_text = read_pdf(uploaded_file) if file_type == "pdf" else read_docx(uploaded_file)
 
-    # Extract keywords from job description or keyword list
-    if "," in job_description:
-        target_keywords = [kw.strip().lower() for kw in job_description.split(",") if kw.strip()]
-    else:
-        target_keywords = extract_keywords(job_description)
+    target_keywords = (
+        [kw.strip().lower() for kw in job_description.split(",") if kw.strip()]
+        if "," in job_description
+        else extract_keywords(job_description)
+    )
 
     st.subheader("🔍 Extracted Target Keywords")
     st.write(", ".join(target_keywords))
@@ -127,7 +111,6 @@ if uploaded_file and job_description:
         st.subheader("📝 Extracted Resume Text")
         st.text_area("Resume Content", resume_text, height=300)
 
-        # Keyword match analysis
         matched_keywords = [kw for kw in target_keywords if kw in resume_text]
         match_score = int(len(matched_keywords) / len(target_keywords) * 100) if target_keywords else 0
 
@@ -141,24 +124,18 @@ if uploaded_file and job_description:
             missing = [kw for kw in target_keywords if kw not in matched_keywords]
             st.subheader("💡 Suggestions for Improvement:")
             for tip in missing:
-                st.markdown(f"- Consider including or elaborating on: **'{tip}'** if it's relevant.")
+                st.markdown(f"- Consider including or elaborating on: **'{tip}'**")
 
-            # Plot Match Score
             plot_match_score(match_score, len(target_keywords))
 
         # Create and download report
-        report = f"Resume Keyword Match Report\n"
-        report += f"{'-'*30}\n"
+        report = f"Resume Keyword Match Report\n{'-'*30}\n"
         report += f"Matched Keywords ({len(matched_keywords)}/{len(target_keywords)}):\n"
         report += ", ".join(matched_keywords) + "\n\n"
         report += f"Score: {match_score}%\n\n"
-
-        if match_score < 100:
-            report += "Suggestions to Improve:\n"
-            for tip in missing:
-                report += f"- Add or expand on: {tip}\n"
-        else:
-            report += "Great job! All key terms matched.\n"
+        report += "Suggestions to Improve:\n" if match_score < 100 else "Great job! All key terms matched.\n"
+        for tip in missing:
+            report += f"- Add or expand on: {tip}\n"
 
         st.download_button(
             label="📥 Download Match Report",
