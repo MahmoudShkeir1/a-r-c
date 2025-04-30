@@ -2,5 +2,7 @@ streamlit
 pdfplumber
 python-docx
 nltk
-spacy
+transformers
+torch
 matplotlib
+fpdf
