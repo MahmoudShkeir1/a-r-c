@@ -18,6 +18,7 @@ USERS = {
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
+# If not authenticated, show login form
 if not st.session_state.authenticated:
     st.title("🔐 Sign In")
     email = st.text_input("Email")
@@ -25,11 +26,10 @@ if not st.session_state.authenticated:
     if st.button("Login"):
         if email in USERS and USERS[email] == password:
             st.session_state.authenticated = True
-            st.success("Login successful! Please wait...")
-            st.stop()
+            st.experimental_rerun()  # Rerun to clear the login form and show the app
         else:
             st.error("Invalid email or password")
-    st.stop()
+    st.stop()  # Stop the execution here until the user logs in
 
 # --- App Logic Below This Point ---
 
