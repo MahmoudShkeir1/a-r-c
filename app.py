@@ -3,7 +3,6 @@ import pdfplumber
 import docx
 import nltk
 import spacy
-from spacy.cli import download
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
 import torch
@@ -11,16 +10,8 @@ from transformers import BertTokenizer, BertModel
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 
-# Download required NLTK resources
-nltk.download('punkt')
-nltk.download('stopwords')
-
-# Ensure SpaCy model is available
-try:
-    nlp = spacy.load("en_core_web_sm")
-except OSError:
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+# Load SpaCy model (ensure it's installed via requirements.txt)
+nlp = spacy.load("en_core_web_sm")
 
 # Load BERT for semantic similarity
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -77,12 +68,9 @@ def extract_keywords(text):
         words = [word for word in words if word.isalpha() and word not in stop_words]
 
         for i in range(len(words)):
-            # single word
             keywords.add(words[i])
-            # two-word phrase
             if i + 1 < len(words):
                 keywords.add(f"{words[i]} {words[i+1]}")
-            # three-word phrase
             if i + 2 < len(words):
                 keywords.add(f"{words[i]} {words[i+1]} {words[i+2]}")
 
@@ -109,7 +97,6 @@ def plot_match_score(match_score, total_keywords):
 
 # Main logic
 if uploaded_file and job_description:
-    # Extract resume text
     file_type = uploaded_file.name.split(".")[-1]
     if file_type == "pdf":
         resume_text = read_pdf(uploaded_file)
@@ -119,7 +106,6 @@ if uploaded_file and job_description:
         st.error("Unsupported file type.")
         resume_text = ""
 
-    # Extract keywords from job description or keyword list
     if "," in job_description:
         target_keywords = [kw.strip().lower() for kw in job_description.split(",") if kw.strip()]
     else:
@@ -132,7 +118,6 @@ if uploaded_file and job_description:
         st.subheader("📝 Extracted Resume Text")
         st.text_area("Resume Content", resume_text, height=300)
 
-        # Keyword match analysis
         matched_keywords = [kw for kw in target_keywords if kw in resume_text]
         match_score = int(len(matched_keywords) / len(target_keywords) * 100) if target_keywords else 0
 
@@ -148,10 +133,8 @@ if uploaded_file and job_description:
             for tip in missing:
                 st.markdown(f"- Consider including or elaborating on: **'{tip}'** if it's relevant.")
 
-            # Plot Match Score
             plot_match_score(match_score, len(target_keywords))
 
-        # Create and download report
         report = f"Resume Keyword Match Report\n"
         report += f"{'-'*30}\n"
         report += f"Matched Keywords ({len(matched_keywords)}/{len(target_keywords)}):\n"
