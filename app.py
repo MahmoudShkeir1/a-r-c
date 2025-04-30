@@ -25,7 +25,8 @@ if not st.session_state.authenticated:
     if st.button("Login"):
         if email in USERS and USERS[email] == password:
             st.session_state.authenticated = True
-            st.experimental_rerun()
+            st.success("Login successful! Please wait...")
+            st.stop()
         else:
             st.error("Invalid email or password")
     st.stop()
