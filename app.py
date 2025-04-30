@@ -10,12 +10,12 @@ from nltk.tokenize import sent_tokenize, word_tokenize
 nltk.download('punkt')
 nltk.download('stopwords')
 
-# --- Authentication Setup ---
+# --- Pre-hashed password (from Hasher(["Mtr@7543myr"]).generate()) ---
 credentials = {
     "usernames": {
         "johndoe": {
             "name": "John Doe",
-            "password": stauth.Hasher(["Mtr@7543myr"]).generate()[0]  # Change password as needed
+            "password": "$2b$12$PhAFGzjG.zbKFtXreKh46OfvFshJGCyr78fpjV0UibgvMAvAwqHVa"  # Pre-hashed
         }
     }
 }
@@ -31,26 +31,20 @@ name, authentication_status, username = authenticator.login("Login", "main")
 
 if authentication_status is False:
     st.error("Username or password is incorrect")
-
 elif authentication_status is None:
     st.warning("Please enter your username and password")
-
 else:
     authenticator.logout("Logout", "sidebar")
     st.success(f"Welcome {name}!")
 
     # --- Resume Checker App ---
-
     st.title("📄 AI Resume Checker")
 
-    # Upload resume
     uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
 
-    # Paste job description or keyword list
     st.markdown("### 💼 Enter Job Description or Keywords")
     job_description = st.text_area("Paste the job description here, or list keywords separated by commas")
 
-    # Helper: Read PDF
     def read_pdf(file):
         with pdfplumber.open(file) as pdf:
             text = ""
@@ -60,33 +54,27 @@ else:
                     text += page_text
             return text.lower()
 
-    # Helper: Read DOCX
     def read_docx(file):
         doc = docx.Document(file)
         full_text = "\n".join([para.text for para in doc.paragraphs])
         return full_text.lower()
 
-    # Improved keyword extractor
     def extract_keywords(text):
         stop_words = set(stopwords.words('english'))
         sentences = sent_tokenize(text.lower())
         keywords = set()
-
         for sent in sentences:
             words = word_tokenize(sent)
             words = [word for word in words if word.isalpha() and word not in stop_words]
-
             for i in range(len(words)):
                 keywords.add(words[i])
                 if i + 1 < len(words):
                     keywords.add(f"{words[i]} {words[i+1]}")
                 if i + 2 < len(words):
                     keywords.add(f"{words[i]} {words[i+1]} {words[i+2]}")
-
         clean_keywords = [kw.strip() for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40]
         return sorted(set(clean_keywords))
 
-    # Main logic
     if uploaded_file and job_description:
         file_type = uploaded_file.name.split(".")[-1]
         if file_type == "pdf":
