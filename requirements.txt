@@ -2,9 +2,9 @@ streamlit
 pdfplumber
 python-docx
 nltk
-spacy
-transformers
 torch
+transformers
 matplotlib
 fpdf
-en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
+https://github.com/explosion/spacy/releases/download/v3.8.2/spacy-3.8.2-py3-none-any.whl
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.5.0/en_core_web_sm-3.5.0-py3-none-any.whl
