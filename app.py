@@ -2,12 +2,29 @@ import streamlit as st
 import pdfplumber
 import docx
 import nltk
+import spacy
+from spacy.cli import download
 from nltk.corpus import stopwords
 from nltk.tokenize import sent_tokenize, word_tokenize
+import torch
+from transformers import BertTokenizer, BertModel
+import matplotlib.pyplot as plt
+from fpdf import FPDF
 
 # Download required NLTK resources
 nltk.download('punkt')
 nltk.download('stopwords')
+
+# Ensure SpaCy model is available
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
+
+# Load BERT for semantic similarity
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertModel.from_pretrained('bert-base-uncased')
 
 # App title
 st.title("📄 AI Resume Checker")
@@ -21,19 +38,33 @@ job_description = st.text_area("Paste the job description here, or list keywords
 
 # Helper: Read PDF
 def read_pdf(file):
-    with pdfplumber.open(file) as pdf:
-        text = ""
-        for page in pdf.pages:
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text
-        return text.lower()
+    try:
+        with pdfplumber.open(file) as pdf:
+            text = ""
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text
+            return text.lower()
+    except Exception as e:
+        st.error(f"Error reading PDF: {e}")
+        return ""
 
 # Helper: Read DOCX
 def read_docx(file):
-    doc = docx.Document(file)
-    full_text = "\n".join([para.text for para in doc.paragraphs])
-    return full_text.lower()
+    try:
+        doc = docx.Document(file)
+        full_text = "\n".join([para.text for para in doc.paragraphs])
+        return full_text.lower()
+    except Exception as e:
+        st.error(f"Error reading DOCX: {e}")
+        return ""
+
+# Extract Named Entities (for better keyword matching)
+def extract_named_entities(text):
+    doc = nlp(text)
+    entities = set([ent.text.lower() for ent in doc.ents])
+    return entities
 
 # Improved keyword extractor
 def extract_keywords(text):
@@ -57,6 +88,24 @@ def extract_keywords(text):
 
     clean_keywords = [kw.strip() for kw in keywords if 1 <= len(kw.split()) <= 3 and len(kw) < 40]
     return sorted(set(clean_keywords))
+
+# Function to calculate similarity between job description and resume using BERT
+def get_similarity(text1, text2):
+    inputs1 = tokenizer(text1, return_tensors='pt')
+    inputs2 = tokenizer(text2, return_tensors='pt')
+    with torch.no_grad():
+        outputs1 = model(**inputs1)
+        outputs2 = model(**inputs2)
+    similarity = torch.cosine_similarity(outputs1[0][0], outputs2[0][0], dim=0)
+    return similarity.item()
+
+# Function to plot match score
+def plot_match_score(match_score, total_keywords):
+    fig, ax = plt.subplots()
+    ax.barh([f'Match Score'], [match_score])
+    ax.set_xlim(0, total_keywords)
+    ax.set_title("Keyword Match Score")
+    st.pyplot(fig)
 
 # Main logic
 if uploaded_file and job_description:
@@ -99,7 +148,10 @@ if uploaded_file and job_description:
             for tip in missing:
                 st.markdown(f"- Consider including or elaborating on: **'{tip}'** if it's relevant.")
 
-        # Downloadable report
+            # Plot Match Score
+            plot_match_score(match_score, len(target_keywords))
+
+        # Create and download report
         report = f"Resume Keyword Match Report\n"
         report += f"{'-'*30}\n"
         report += f"Matched Keywords ({len(matched_keywords)}/{len(target_keywords)}):\n"
